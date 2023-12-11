@@ -6,40 +6,53 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  API_KEY: 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
+
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
+  # Build job
   build:
-    name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Install Dependencies
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Detect package manager
+        id: detect-package-manager
         run: |
-           npm install -g npm@latest
-           npm install --legacy-peer-deps
-           npm install -g pnpm --legacy-peer-deps
-      - name: Bu
-        env: |
-          ACCESS_TOKEN: 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
-          BRANCH: main
-          BUILD_SCRIPT: npm run build
-
-  # deploy:
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v3
-
-  #     - name: Generate deployment package
-  #       run: zip -r deploy.zip . -x '*.git*'
-
-  #     - name: Deploy to EB
-  #       uses: einaregilsson/beanstalk-deploy@v21
-  #       with:
-  #         aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         application_name: mononoke-site
-  #         environment_name: mononoke-site-dev
-  #         version_label: 0.0.5
-  #         region: ${{ env.AWS_REGION }}
-  #         deployment_package: deploy.zip
+          if [ -f "${{ github.workspace }}/yarn.lock" ]; then
+            echo "manager=yarn" >> $GITHUB_OUTPUT
+            echo "command=install" >> $GITHUB_OUTPUT
+            echo "runner=yarn" >> $GITHUB_OUTPUT
+            exit 0
+          elif [ -f "${{ github.workspace }}/package.json" ]; then
+            echo "manager=npm" >> $GITHUB_OUTPUT
+            echo "command=ci" >> $GITHUB_OUTPUT
+            echo "runner=npx --no-install" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "Unable to determine package manager" >&2
+            exit 1
+          fi
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: ${{ steps.detect-package-manager.outputs.manager }}
+      - name: Restore cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            .next/cache
+          # Generate a new cache whenever packages or source files change.
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          # If source files changed but packages didn't, rebuild from a prior cache.
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-
+      - name: Install dependencies
+        run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
+      - name: Build with Next.js
+        run: npm run build
