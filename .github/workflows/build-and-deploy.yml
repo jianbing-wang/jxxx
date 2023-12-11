@@ -18,7 +18,7 @@ jobs:
            npm install --legacy-peer-deps
            npm install -g pnpm --legacy-peer-deps
       - name: Bu
-        run: |
+        env: |
           ACCESS_TOKEN: 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
           BRANCH: main
           BUILD_SCRIPT: npm run build
